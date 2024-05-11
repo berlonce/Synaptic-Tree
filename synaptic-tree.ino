@@ -74,7 +74,7 @@ testcase currtest = SOUNDFILES;
 #define ALLSTRIPS 27
 #define BASESTRIPS 5
 #define TOUCHPADS 5
-#define BRIGHTNESS 10
+#define BRIGHTNESS 5
 #define GAMELIMIT 10
 #define DEFMODE_MAXDUR 30
 #define ALTMODE_MAXDUR 10
@@ -135,10 +135,10 @@ testcase currtest = SOUNDFILES;
 enum sound_ids {
   ACTIVATE,
   REDPAD,
-  GREENPAD,
-  BLUEPAD,
-  ORANGEPAD,
   PURPLEPAD,
+  BLUEPAD,
+  GREENPAD,
+  ORANGEPAD,
   WIN,
   LOSE,
   BEAT,
@@ -174,10 +174,10 @@ struct sound {
 // sound array for gamepad
 sound gamenotes[] = {
   sounds[REDPAD],
-  sounds[GREENPAD],
+  sounds[PURPLEPAD],
   sounds[BLUEPAD],
-  sounds[ORANGEPAD],
-  sounds[PURPLEPAD]
+  sounds[GREENPAD],
+  sounds[ORANGEPAD]
  };
 
 // touchpad lights order
@@ -190,8 +190,7 @@ int padlights[][6] = {
 };
 
 // game states
-enum gamestate { PROMPT,
-                 RESPONSE };
+enum gamestate { PROMPT, RESPONSE };
 
 // pin number of each led strip
 int ledpins[] = {
@@ -392,7 +391,7 @@ struct pathPosition {
 };
 typedef struct pathPosition Struct;
 Struct get_path_position(int path, int index);
-void playsound(sound s);
+void playsound(sound s, bool force = true);
 void triggersound(sound s);
 void gamestart();
 void run_prompt(int speed = 1000);
@@ -662,7 +661,7 @@ void loop() {
     // reset touch state
     lasttouched = currtouched;
 
-    // turn off pad lights if not in game
+    // turn pad lights white if not in game
     if (currmode != GAME) {
       padstrip.fill(colors[WHITE]);
       padstrip.show();
@@ -687,6 +686,7 @@ void loop() {
           }
         } else {
           memset(pulse_count, 0, sizeof pulse_count);
+          // if in default mode and there are alternative modes, then pick one
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)){
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
@@ -705,6 +705,7 @@ void loop() {
           getSamples();
           displayUpdate();
         } else {
+          // if in default mode and there are alternative modes, then pick one
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)) {
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
@@ -718,12 +719,12 @@ void loop() {
         }
         break;
       case AMBIENT:
-        // Serial.print("Ambient "); Serial.println(elapsedAmbient);
         if (elapsedAmbient < ambientdur) {
           switch (currambientmode) {
             case SPARKLE:
               clear_tree();
               sparkle(sparkle_color1, sparkle_color2);
+              playsound(sounds[SPARKLESOUND], false); // loop sound if ended
               break;
             case STRIPE:
               clear_tree();
@@ -755,8 +756,10 @@ void loop() {
               if (rainbowHue >= 5 * 65536) {
                 rainbowHue = 0;
               }
+              playsound(sounds[TWINKLESOUND], false); // loop sound if ended
           }
         } else {
+          // if in default mode and there are alternative modes, then pick one
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)) {
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
@@ -772,13 +775,14 @@ void loop() {
       case LIGHTNING:
         // Serial.print("Lightning "); Serial.println(elapsedLightning);
         if (elapsedLightning < lightningdur) {
-          // Serial.print("Mode is lightning: ");
-          // Serial.println(elapsedLastStrike);
+          Serial.print("Mode is lightning: ");
+          Serial.println(elapsedLastStrike);
           if (elapsedLastStrike > random(2000, 5000)) {
             // Serial.print("Strike wait is "); Serial.println(strikeWait);
             strike();
           }
         } else {
+          // if in default mode and there are alternative modes, then pick one
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)) {
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
@@ -794,12 +798,13 @@ void loop() {
       case HEARTBEAT:
         // Serial.print("Heartbeat "); Serial.println(elapsedHeartbeat);
         if (elapsedHeartbeat < heartbeatdur) {
-          // Serial.print("Mode is heartbeat: ");
-          // Serial.println(elapsedHeartbeat);
+          Serial.print("Mode is heartbeat: ");
+          Serial.println(elapsedHeartbeat);
           if (elapsedLastBeat > random(2000, 3000)) {
             beat();
           }
         } else {
+          // if in default mode and there are alternative modes, then pick one
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)) {
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
@@ -813,13 +818,9 @@ void loop() {
         }
         break;
       default:
-      ;
-        //Serial.println("no animation");
+        ;
     }
-
-    // Serial.print("Current mode: "); Serial.println(currmode);
-
-    // this slows everything down
+    // this slows everything down for debugging
     // delay(30);
 
     // comment out this line for detailed data from the touch sensor!
@@ -1989,27 +1990,36 @@ void change_mode(mode new_mode) {
   }
 }
 
-// play sound using serial command, will cut off any current playing sound
-void playsound (sound s) {
+// play sound using serial command, if forced then will cut off any current playing sound
+// if not forced then it will not play if there is a current playing sound
+void playsound (sound s, bool force) {
+  bool play = true;
   if (!digitalRead(SFX_ACT)) {
-    if (!sfx.stop()) {
-      sfx.reset();
-      Serial.println("Reset soundboard.");
+    if (force) {
+      if (!sfx.stop()) {
+        sfx.reset();
+        Serial.println("Reset soundboard.");
+      }
+      else {
+        Serial.println("Stopped prev sound.");
+      }
     }
     else {
-      Serial.println("Stopped prev sound.");
+      play = false;
     }
   }
-  char filename[11];
-  memcpy(filename, s.pname, 11);
-  if (!sfx.playTrack(filename)) {
-    Serial.print("Failed: *");
-    Serial.print(s.pname);
-    Serial.println("*");
-  }
-  else {
-    Serial.print("Played: ");
-    Serial.println(s.name);
+  if (play) {
+    char filename[11];
+    memcpy(filename, s.pname, 11);
+    if (!sfx.playTrack(filename)) {
+      Serial.print("Failed: *");
+      Serial.print(s.pname);
+      Serial.println("*");
+    }
+    else {
+      Serial.print("Played: ");
+      Serial.println(s.name);
+    }
   }
 }
 
