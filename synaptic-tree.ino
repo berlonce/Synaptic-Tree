@@ -44,6 +44,7 @@ enum testcase {
   VISUALIZER,
   PRINT_PATHS,
   SOUNDFILES,
+  GAMEWIN,
   TESTCASE_QTY
 };
 
@@ -51,7 +52,7 @@ enum testcase {
 mode defmode = AMBIENT;
 mode altmodes[] = { HEARTBEAT, LIGHTNING };
 ambientmode currambientmode = RAINBOW;
-testcase currtest = SOUNDFILES;
+testcase currtest = GAMEWIN;
 
 // general settings
 #define TESTSTRIP true
@@ -74,7 +75,8 @@ testcase currtest = SOUNDFILES;
 #define ALLSTRIPS 27
 #define BASESTRIPS 5
 #define TOUCHPADS 5
-#define BRIGHTNESS 5
+#define BRIGHTNESS 50
+#define RAINBOWDIMMING 0.05
 #define GAMELIMIT 10
 #define DEFMODE_MAXDUR 30
 #define ALTMODE_MAXDUR 10
@@ -334,7 +336,7 @@ uint16_t currtouched = 0;
 elapsedMillis elapsetouched[TOUCHPADS];     // elapsed time while touched
 elapsedMillis elapsenottouched[TOUCHPADS];  // elapsed time while not touched
 elapsedMillis elapsedVisualize, elapsedAmbient, elapsedThinking,
-  elapsedLightning, elapsedHeartbeat, elapsedLastBeat, elapsedLastStrike, elapsedSound;
+  elapsedLightning, elapsedHeartbeat, elapsedLastBeat, elapsedLastStrike, elapsedSound, elapsedSerial;
 int ambientdur, visualizedur, heartbeatdur, lightningdur, thinkingdur;
 int idle_timer = 0;
 int gamesteps[GAMELIMIT][5];  // when you reach this limit you win the game
@@ -455,15 +457,16 @@ uint32_t stripe_color1, stripe_color2;
 
 // Initialize everything and prepare to start
 void setup() {
+  elapsedSerial = 0;
   Serial.begin(115200);
-  while (!Serial) { // needed to keep leonardo/micro from starting too fast!
+  while (!Serial && (elapsedSerial < 3000)) { // make sure console output is ready
     delay(10);
   }
   Serial.println("Starting setup...");
 
   // setup uart for soundboard
   Serial1.begin(9600);
-  while (!Serial1) { // needed to keep leonardo/micro from starting too fast!
+  while (!Serial1) { // make sure soundboard is started
     delay(10);
   }
 
@@ -690,8 +693,8 @@ void loop() {
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)){
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
-            Serial.print("next altmode: ");
-            Serial.println(next_mode);
+            //Serial.print("next altmode: ");
+            //Serial.println(next_mode);
             change_mode(next_mode);
           }
           else {
@@ -700,7 +703,6 @@ void loop() {
         }
         break;
       case VISUALIZE:
-        // Serial.print("Visualize "); Serial.println(elapsedVisualize);
         if (elapsedVisualize < visualizedur) {
           getSamples();
           displayUpdate();
@@ -709,8 +711,8 @@ void loop() {
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)) {
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
-            Serial.print("next altmode: ");
-            Serial.println(next_mode);
+            //Serial.print("next altmode: ");
+            //Serial.println(next_mode);
             change_mode(next_mode);
           }
           else {
@@ -763,8 +765,8 @@ void loop() {
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)) {
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
-            Serial.print("next altmode: ");
-            Serial.println(next_mode);
+            //Serial.print("next altmode: ");
+            //Serial.println(next_mode);
             change_mode(next_mode);
           }
           else {
@@ -773,11 +775,10 @@ void loop() {
         }
         break;
       case LIGHTNING:
-        // Serial.print("Lightning "); Serial.println(elapsedLightning);
         if (elapsedLightning < lightningdur) {
-          Serial.print("Mode is lightning: ");
-          Serial.println(elapsedLastStrike);
-          if (elapsedLastStrike > random(2000, 5000)) {
+          //Serial.print("Mode is lightning: ");
+          //Serial.println(elapsedLastStrike);
+          if (elapsedLastStrike > random(3000, 6000)) {
             // Serial.print("Strike wait is "); Serial.println(strikeWait);
             strike();
           }
@@ -786,8 +787,8 @@ void loop() {
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)) {
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
-            Serial.print("next altmode: ");
-            Serial.println(next_mode);
+            //Serial.print("next altmode: ");
+            //Serial.println(next_mode);
             change_mode(next_mode);
           }
           else {
@@ -796,10 +797,9 @@ void loop() {
         }
         break;
       case HEARTBEAT:
-        // Serial.print("Heartbeat "); Serial.println(elapsedHeartbeat);
         if (elapsedHeartbeat < heartbeatdur) {
-          Serial.print("Mode is heartbeat: ");
-          Serial.println(elapsedHeartbeat);
+          //Serial.print("Mode is heartbeat: ");
+          //Serial.println(elapsedHeartbeat);
           if (elapsedLastBeat > random(2000, 3000)) {
             beat();
           }
@@ -808,8 +808,8 @@ void loop() {
           if ((currmode == defmode) && (ARRAY_SIZE(altmodes) > 0)) {
             clear_tree();
             mode next_mode = altmodes[random(ARRAY_SIZE(altmodes))];
-            Serial.print("next altmode: ");
-            Serial.println(next_mode);
+            //Serial.print("next altmode: ");
+            //Serial.println(next_mode);
             change_mode(next_mode);
           }
           else {
@@ -820,30 +820,6 @@ void loop() {
       default:
         ;
     }
-    // this slows everything down for debugging
-    // delay(30);
-
-    // comment out this line for detailed data from the touch sensor!
-    return;
-
-    // debugging info, what
-    Serial.print("\t\t\t\t\t\t\t\t\t\t\t\t\t 0x");
-    Serial.println(cap.touched(), HEX);
-    Serial.print("Filt: ");
-    for (uint8_t i = 0; i < 12; i++) {
-      Serial.print(cap.filteredData(i));
-      Serial.print("\t");
-    }
-    Serial.println();
-    Serial.print("Base: ");
-    for (uint8_t i = 0; i < 12; i++) {
-      Serial.print(cap.baselineData(i));
-      Serial.print("\t");
-    }
-    Serial.println();
-
-    // put a delay so it isn't overwhelming
-    delay(100);
   }
 }
 
@@ -1107,8 +1083,8 @@ void run_prompt(int speed) {
 // game win animation then go to next mode
 void gamewin(mode nextmode) {
   Serial.println("Game is won!");
-  playsound(sounds[WIN]);
   for (int x = 0; x < 7; x++) {
+    playsound(sounds[WIN], false); // repeat sound if stopped
     for (int i = 0; i < ALLSTRIPS; i++) {
       strips[i].fill(colors[GREEN]);
       strips[i].show();
@@ -1120,7 +1096,7 @@ void gamewin(mode nextmode) {
     }
     delay(50);
   }
-  delay(500);
+  delay(1000);
   currmode = nextmode;
 }
 
@@ -1133,9 +1109,9 @@ void gamefail(mode nextmode) {
     strips[i].fill(colors[RED]);
     strips[i].show();
   }
-  delay(3000);
+  delay(4000);
   clear_tree();
-  delay(1000);
+  //delay(1000);
   // flash the correct branch
   for (int x = 0; x < 4; x++) {
     playsound(gamenotes[gamesteps[trycount][0]]);
@@ -1320,10 +1296,6 @@ void strike(int path_count, uint32_t color) {
     }
     delay(30);
   }
-  // for (int i = 0; i < ALLSTRIPS; i++) {
-  //   strips[i].clear();
-  //   strips[i].show();
-  // }
   currmode = LIGHTNING;
   elapsedLastStrike = 0;
 }
@@ -1352,7 +1324,6 @@ void beat(int speed, uint32_t color) {
         }
         delay(20);
       }
-      // delay(10);
     }
     delay(150);
   }
@@ -1752,6 +1723,7 @@ void rainbow(int hue, int wait) {
     int pixelHue = hue + 65536L;
     for (int j = 0; j < ALLSTRIPS; j++) {
       strips[j].fill(strips[j].gamma32(strips[j].ColorHSV(pixelHue)));
+      strips[j].setBrightness(round(BRIGHTNESS * RAINBOWDIMMING));
       strips[j].show();
     }
     delay(wait);
@@ -1909,7 +1881,6 @@ void ambient() {
   currmode = AMBIENT;
   // randomly select an ambient mode
   currambientmode = ambientmode(random(AMBIENTMODE_QTY));
-  // currambientmode = TWINKLE;
   Serial.print("Current ambient mode: ");
   Serial.println(currambientmode);
   switch (currambientmode) {
@@ -1927,7 +1898,7 @@ void ambient() {
           }
           sparkle_color2 = colors[RED];
         }
-        playsound(sounds[SPARKLESOUND]);
+        playsound(sounds[SPARKLESOUND]); // stop any existing sound and play this
         break;
       }
     case STRIPE:
@@ -1944,16 +1915,15 @@ void ambient() {
           }
           stripe_color2 = colors[RED];
         }
-        playsound(sounds[TWINKLESOUND]);
+        playsound(sounds[TWINKLESOUND]); // stop any existing sound and play this
         break;
-        // case FIRE:
-        // case METEOR:
-        //   clear_tree();
-        //   break;
       }
+    // case TWINKLE:
+    // case FIRE:
+    // case METEOR:
     default:
       {
-        playsound(sounds[TWINKLESOUND]);
+        playsound(sounds[TWINKLESOUND]); // stop any existing sound and play this
       }
   }
   int maxdur = DEFMODE_MAXDUR;
@@ -1965,6 +1935,10 @@ void ambient() {
 void change_mode(mode new_mode) {
   int maxdur = DEFMODE_MAXDUR;
   if (defmode != new_mode) maxdur = ALTMODE_MAXDUR;
+  // reset brightness in case previous mode was dimmed
+  for (int j = 0; j < ALLSTRIPS; j++) {
+    strips[j].setBrightness(BRIGHTNESS);
+  }
   switch (new_mode) {
     case THINK:
       think();
@@ -2012,13 +1986,12 @@ void playsound (sound s, bool force) {
     char filename[11];
     memcpy(filename, s.pname, 11);
     if (!sfx.playTrack(filename)) {
-      Serial.print("Failed: *");
-      Serial.print(s.pname);
-      Serial.println("*");
+      Serial.print("Failed to play: ");
+      Serial.println(s.name);
     }
     else {
-      Serial.print("Played: ");
-      Serial.println(s.name);
+      //Serial.print("Played: ");
+      //Serial.println(s.name);
     }
   }
 }
@@ -2187,6 +2160,12 @@ void test() {
   if (currtest == SOUNDFILES) {
     for (int i = 0; i < 11; i++) {
       triggersound(sounds[i]);
+    }
+  }
+  if (currtest == GAMEWIN) {
+    for (int i = 0; i < 3; i++) {
+      gamewin();
+      delay(3000);
     }
   }
 }
